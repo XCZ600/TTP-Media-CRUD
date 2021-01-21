@@ -17,8 +17,9 @@ mongoose
     })
 
 //set up Apollo server
-
 const server = new ApolloServer({
     typeDefs,
-    resolvers
-})
+    resolvers,
+    context: ({ req }) => ({ req })
+
+});
