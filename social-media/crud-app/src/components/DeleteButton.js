@@ -1,87 +1,67 @@
-import React from 'react'
-import { Form, Button } from 'semantic-ui-react'
-import gql from 'graphql-tag'
-import { useMutation } from '@apollo/react-hooks'
+import React, { useState } from "react";
+import gql from "graphql-tag";
+import { useMutation } from "@apollo/react-hooks";
+import { Button, Confirm, Icon } from "semantic-ui-react";
+import {FETCH_POSTS_QUERY} from '../util/graphql'
 
-import { useForm } from '../util/hooks'
-import { FETCH_POSTS_QUERY } from '../util/graphql'
+export default function DeleteButton({ postId, commentId, callback }) {
+  const [confirmOpen, setConfirmOpen] = useState(false);
+  const mutation = commentId ? DELETE_COMMENT_MUTATION : DELETE_POST_MUTATION
 
-function PostForm() {
-    const {values, onChange, onSubmit }= useForm(createPostCallback, {
-        body: ''
-    });
-
-    const [createPost, { error }] = useMutation(CREATE_POST_MUTATION, {
-        variables: values,
-        update(proxy, result){
+  const [deletePostOrMutation] = useMutation(mutation, {
+    refetchQueries: [{ query: FETCH_POSTS_QUERY }],
+    update(proxy) {
+        setConfirmOpen(false);
+        if(!commentId){
             const data = proxy.readQuery({
                 query: FETCH_POSTS_QUERY
-            })
-            const posts = [result.data.createPost, ...data.getPosts];
-            proxy.writeQuery({query: FETCH_POSTS_QUERY, data: { getPosts: posts}})
-            values.body = ''
-        },
-        onError(err){
-            return err;
+            });
+            data.getPosts = data.getPosts.filter(p => p.id !== postId);
+            proxy.writeQuery({ query: FETCH_POSTS_QUERY, data})
         }
-    })
-
-    function createPostCallback(){
-        createPost();
-    }
-
-    return (
-        <div>
-            <Form onSubmit={onSubmit}>
-                <h2> Create a Post: </h2>
-                <Form.Field>
-                    <Form.Input
-                    placeholder="Hi world!"
-                    name="body"
-                    onChange={onChange}
-                    value={values.body}
-                    error={error ? true : false}
-                    />
-                    <Button type="submit" color="teal">
-                        Submit
-                    </Button>
-                </Form.Field>
-            </Form>
-            {error && (
-                <div className="ui error message">
-                    <ul className="list">
-                        <li>{error.graphQLErrors[0].message}</li>
-                    </ul>
-                    </div>
-            )}
-        </div>
-    )
+        if(callback) callback();
+    },
+    variables: {
+      postId,
+      commentId
+    },
+  });
+  return (
+    <div>
+      <Button
+        as="div"
+        color="red"
+        floated="right"
+        onClick={() => setConfirmOpen(true)}
+      >
+        <Icon name="trash" style={{ margin: 0 }} />
+      </Button>
+      <Confirm
+        open={confirmOpen}
+        onCancel={() => setConfirmOpen(false)}
+        onConfirm={deletePostOrMutation}
+      />
+    </div>
+  );
 }
 
-
-const CREATE_POST_MUTATION = gql`
-  mutation createPost($body: String!) {
-    createPost(body: $body) {
-      id
-      body
-      createdAt
-      username
-      likes {
-        id
-        username
-        createdAt
-      }
-      likeCount
-      comments {
-        id
-        body
-        username
-        createdAt
-      }
-      commentCount
+const DELETE_POST_MUTATION = gql`
+    mutation deletePost($postId: ID!){
+        deletePost(postId: $postId)
     }
-  }
 `;
 
-
-export default PostForm;
+const DELETE_COMMENT_MUTATION = gql `
+    mutation deleteComment($postId: ID!, $commentId: ID!){
+        deleteComment(postId: $postId, commentId: $commentId){
+            id
+            comments{
+                id
+                username
+                createdAt
+                body
+            }
+            commentCount
+        }
+    }
+`
